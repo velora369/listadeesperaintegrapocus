@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
+import { getMessaging, isSupported } from "firebase/messaging";
 
 // Configurações reais fornecidas pelo usuário
 const firebaseConfig = {
@@ -25,3 +26,13 @@ if (typeof window !== "undefined") {
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Messaging só no browser e quando suportado (ex.: HTTPS, SW)
+let messagingInstance: ReturnType<typeof getMessaging> | null = null;
+export async function getMessagingSafe() {
+  if (typeof window === "undefined") return null;
+  const supported = await isSupported();
+  if (!supported) return null;
+  if (!messagingInstance) messagingInstance = getMessaging(app);
+  return messagingInstance;
+}

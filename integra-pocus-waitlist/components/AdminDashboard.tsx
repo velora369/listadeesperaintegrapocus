@@ -2,6 +2,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, ProfessionalStatus } from '../types';
 import { dbService } from '../services/dbService';
+import { auth } from '../firebase';
+import {
+  enablePushNotifications,
+  isPushSupported,
+  type NotificationStatus,
+} from '../services/notificationService';
 
 export const AdminDashboard: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -9,6 +15,9 @@ export const AdminDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateSort, setDateSort] = useState<'newest' | 'oldest'>('newest');
   const [dbError, setDbError] = useState<string | null>(null);
+  const [pushStatus, setPushStatus] = useState<NotificationStatus | null>(null);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
 
   // Mapeamento para garantir que tudo apareça em PT-BR, mesmo dados antigos
   const translateStatus = (status: string) => {
@@ -27,6 +36,10 @@ export const AdminDashboard: React.FC = () => {
     };
     return translations[status] || status;
   };
+
+  useEffect(() => {
+    isPushSupported().then(setPushSupported);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = dbService.subscribeToLeads(
@@ -156,6 +169,16 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleEnablePush = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    setPushLoading(true);
+    setPushStatus(null);
+    const result = await enablePushNotifications(user.uid);
+    setPushStatus(result);
+    setPushLoading(false);
+  };
+
   const handleDeleteLead = async (e: React.MouseEvent, id: string, name: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -175,6 +198,42 @@ export const AdminDashboard: React.FC = () => {
         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
           <p className="font-bold">Problema no Banco de Dados:</p>
           <p>{dbError}</p>
+        </div>
+      )}
+
+      {pushSupported === true && (
+        <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700 rounded-xl">
+          <p className="text-sm text-slate-300 mb-2">Receba um aviso no celular quando alguém se cadastrar na lista.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleEnablePush}
+              disabled={pushLoading}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-800 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all"
+            >
+              {pushLoading ? (
+                <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              )}
+              {pushLoading ? "Ativando…" : "Ativar notificações no celular"}
+            </button>
+            {pushStatus?.status === "ready" && (
+              <span className="text-green-400 text-sm">Notificações ativadas.</span>
+            )}
+            {pushStatus?.status === "permission-denied" && (
+              <span className="text-amber-400 text-sm">Permissão negada. Habilite nas configurações do navegador.</span>
+            )}
+            {pushStatus?.status === "no-vapid" && (
+              <span className="text-amber-400 text-sm">Configure VITE_VAPID_KEY no .env (veja PUSH_SETUP.md).</span>
+            )}
+            {pushStatus?.status === "error" && (
+              <span className="text-red-400 text-sm">{pushStatus.message}</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">No iPhone: adicione esta página à tela inicial (Compartilhar → Adicionar à Tela de Início). iOS 16.4+.</p>
         </div>
       )}
 

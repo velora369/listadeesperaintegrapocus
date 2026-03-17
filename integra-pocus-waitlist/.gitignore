@@ -1,0 +1,12 @@
+# Variáveis de ambiente (nunca commitar chaves)
+.env
+.env.local
+.env.*.local
+
+# Dependências e build
+node_modules
+dist
+
+# Logs e cache
+*.log
+.cache
