@@ -16,16 +16,27 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Mensagens em background: personalizar notificação se for mensagem só de dados
+// Mensagens em background:
+// - Se vier com payload.notification, deixamos o próprio navegador/sistema exibir
+// - Se for "data-only" (sem notification), aí sim montamos manualmente a notificação
 messaging.onBackgroundMessage(function (payload) {
-  var title = payload.notification?.title || 'Integra POCUS';
-  var options = {
-    body: payload.notification?.body || 'Nova atividade na lista de espera.',
+  // Já tem notification? Não chama showNotification de novo para evitar duplicado
+  if (payload.notification) {
+    return;
+  }
+
+  const data = payload.data || {};
+  const title = data.title || 'Integra POCUS';
+  const body = data.body || 'Nova atividade na lista de espera.';
+
+  const options = {
+    body,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: 'integra-pocus-push',
     requireInteraction: false,
-    data: payload.data || {}
+    data
   };
+
   return self.registration.showNotification(title, options);
 });
