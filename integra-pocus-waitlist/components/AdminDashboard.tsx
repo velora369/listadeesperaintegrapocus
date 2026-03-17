@@ -20,8 +20,11 @@ export const AdminDashboard: React.FC = () => {
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [pullProgress, setPullProgress] = useState(0);
+  const [justRefreshed, setJustRefreshed] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const pullDistance = useRef(0);
+  const refreshTimeoutRef = useRef<number | null>(null);
 
   // Mapeamento para garantir que tudo apareça em PT-BR, mesmo dados antigos
   const translateStatus = (status: string) => {
@@ -51,6 +54,16 @@ export const AdminDashboard: React.FC = () => {
         setLeads(data);
         setDbError(null);
         setIsRefreshing(false);
+
+        // Feedback visual rápido indicando que o refresh terminou
+        setJustRefreshed(true);
+        if (refreshTimeoutRef.current) {
+          window.clearTimeout(refreshTimeoutRef.current);
+        }
+        refreshTimeoutRef.current = window.setTimeout(() => {
+          setJustRefreshed(false);
+          refreshTimeoutRef.current = null;
+        }, 1600);
       },
       (error) => {
         console.error("Erro Firestore:", error);
@@ -62,7 +75,12 @@ export const AdminDashboard: React.FC = () => {
         setIsRefreshing(false);
       }
     );
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+      }
+    };
   }, [refreshTrigger]);
 
   const handlePullRefresh = useCallback(() => {
@@ -76,6 +94,7 @@ export const AdminDashboard: React.FC = () => {
     if (window.scrollY <= 15) {
       touchStartY.current = e.touches[0].clientY;
       pullDistance.current = 0;
+      setPullProgress(0);
     }
   }, []);
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -83,6 +102,8 @@ export const AdminDashboard: React.FC = () => {
     const y = e.touches[0].clientY;
     if (y > touchStartY.current) {
       pullDistance.current = y - touchStartY.current;
+      const progress = Math.min(pullDistance.current / PULL_THRESHOLD, 1);
+      setPullProgress(progress);
     }
   }, []);
   const handleTouchEnd = useCallback(() => {
@@ -91,6 +112,7 @@ export const AdminDashboard: React.FC = () => {
     }
     touchStartY.current = null;
     pullDistance.current = 0;
+    setPullProgress(0);
   }, [handlePullRefresh]);
 
   const filteredLeads = useMemo(() => {
@@ -233,10 +255,36 @@ export const AdminDashboard: React.FC = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Indicador visual enquanto o usuário está puxando para atualizar */}
+      {pullProgress > 0 && !isRefreshing && (
+        <div className="sticky top-0 z-20 flex items-center justify-center gap-2 py-3 text-xs text-slate-300 bg-slate-900/80 backdrop-blur border-b border-slate-700/60">
+          <span
+            className="inline-block w-5 h-5 border-2 border-slate-500 border-t-blue-400 rounded-full"
+            style={{ transform: `scale(${0.8 + pullProgress * 0.4})`, opacity: 0.5 + pullProgress * 0.5 }}
+          />
+          <span className="tracking-wide uppercase">
+            {pullProgress < 1 ? 'Puxe para atualizar a lista' : 'Solte para atualizar a lista'}
+          </span>
+        </div>
+      )}
+
+      {/* Banner forte quando está de fato atualizando */}
       {isRefreshing && (
-        <div className="flex items-center justify-center gap-2 py-3 text-slate-400 text-sm">
-          <span className="inline-block w-5 h-5 border-2 border-slate-500 border-t-slate-300 rounded-full animate-spin" />
-          <span>Atualizando…</span>
+        <div className="sticky top-0 z-30 flex items-center justify-center gap-3 py-3 px-4 bg-gradient-to-r from-blue-900/80 via-slate-900/80 to-blue-900/80 backdrop-blur border-b border-blue-600/60 shadow-lg text-xs text-blue-100">
+          <span className="inline-block w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="tracking-[0.18em] uppercase">Atualizando lista de leads…</span>
+        </div>
+      )}
+
+      {/* Toast rápido confirmando que o refresh terminou */}
+      {justRefreshed && !isRefreshing && (
+        <div className="fixed left-1/2 -translate-x-1/2 top-4 z-40 px-4 py-2 bg-emerald-600/90 border border-emerald-400/60 rounded-full shadow-2xl text-xs text-white flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <span className="inline-block w-4 h-4 rounded-full bg-white/10 flex items-center justify-center">
+            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none">
+              <path d="M16.667 5.833 8.75 13.75 5 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="tracking-[0.18em] uppercase">Lista atualizada</span>
         </div>
       )}
       {dbError && (

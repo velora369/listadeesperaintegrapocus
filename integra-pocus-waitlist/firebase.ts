@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getMessaging, isSupported } from "firebase/messaging";
@@ -25,6 +25,12 @@ if (typeof window !== "undefined") {
 }
 
 export const auth = getAuth(app);
+
+// Garante que a sessão do admin fique persistente no dispositivo
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  // Em caso de erro, apenas loga no console sem quebrar a aplicação
+  console.error("Erro ao configurar persistência da sessão:", error);
+});
 export const db = getFirestore(app);
 
 // Messaging só no browser e quando suportado (ex.: HTTPS, SW)

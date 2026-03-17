@@ -18,9 +18,19 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    // Escuta mudanças na autenticação
+    // Escuta mudanças na autenticação e ajusta a view automaticamente
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+
+      if (currentUser) {
+        // Se já está logado, sempre abrir direto no painel admin
+        setView('admin');
+      } else {
+        // Se não está logado, voltar para o formulário público
+        setView('form');
+        setIsSuccess(false);
+      }
+
       setIsInitializing(false);
     });
     return () => unsubscribe();
