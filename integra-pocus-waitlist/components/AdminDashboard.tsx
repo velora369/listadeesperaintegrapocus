@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Lead, ProfessionalStatus } from '../types';
 import { dbService } from '../services/dbService';
 import { auth } from '../firebase';
@@ -18,6 +18,10 @@ export const AdminDashboard: React.FC = () => {
   const [pushStatus, setPushStatus] = useState<NotificationStatus | null>(null);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const touchStartY = useRef<number | null>(null);
+  const pullDistance = useRef(0);
 
   // Mapeamento para garantir que tudo apareça em PT-BR, mesmo dados antigos
   const translateStatus = (status: string) => {
@@ -46,6 +50,7 @@ export const AdminDashboard: React.FC = () => {
       (data) => {
         setLeads(data);
         setDbError(null);
+        setIsRefreshing(false);
       },
       (error) => {
         console.error("Erro Firestore:", error);
@@ -54,10 +59,39 @@ export const AdminDashboard: React.FC = () => {
         } else {
           setDbError(`Erro no banco de dados: ${error.message}`);
         }
+        setIsRefreshing(false);
       }
     );
     return () => unsubscribe();
+  }, [refreshTrigger]);
+
+  const handlePullRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    setRefreshTrigger((t) => t + 1);
   }, []);
+
+  const PULL_THRESHOLD = 70;
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (typeof window === 'undefined') return;
+    if (window.scrollY <= 15) {
+      touchStartY.current = e.touches[0].clientY;
+      pullDistance.current = 0;
+    }
+  }, []);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const y = e.touches[0].clientY;
+    if (y > touchStartY.current) {
+      pullDistance.current = y - touchStartY.current;
+    }
+  }, []);
+  const handleTouchEnd = useCallback(() => {
+    if (pullDistance.current >= PULL_THRESHOLD) {
+      handlePullRefresh();
+    }
+    touchStartY.current = null;
+    pullDistance.current = 0;
+  }, [handlePullRefresh]);
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -193,7 +227,18 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="w-full animate-in fade-in duration-500">
+    <div
+      className="w-full animate-in fade-in duration-500"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {isRefreshing && (
+        <div className="flex items-center justify-center gap-2 py-3 text-slate-400 text-sm">
+          <span className="inline-block w-5 h-5 border-2 border-slate-500 border-t-slate-300 rounded-full animate-spin" />
+          <span>Atualizando…</span>
+        </div>
+      )}
       {dbError && (
         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
           <p className="font-bold">Problema no Banco de Dados:</p>
